@@ -1,0 +1,1 @@
+option('enable_http', type : 'boolean', value : true, description : 'Enable HTTP support for remote ZIP files')
