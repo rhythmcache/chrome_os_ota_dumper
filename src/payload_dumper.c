@@ -1,38 +1,38 @@
 #ifdef _WIN32
-    #define WIN32_LEAN_AND_MEAN
-    #include <windows.h>
-    #include <winsock2.h>
-    #include <ws2tcpip.h>
-    #include <io.h>
-    #include <direct.h>
-    #include <sys/stat.h>
-    #include <sys/types.h>
-    #pragma comment(lib, "ws2_32.lib")
-    #define mkdir(path, mode) _mkdir(path)
-    #define sleep(seconds) Sleep((seconds) * 1000)
-    #define strdup _strdup
-    #define ntohl(x) _byteswap_ulong(x)
-    #define be64toh(x) _byteswap_uint64(x)
-    HANDLE hConsole;
-    CONSOLE_SCREEN_BUFFER_INFO consoleInfo;
+#define WIN32_LEAN_AND_MEAN
+#include <direct.h>
+#include <io.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <windows.h>
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#pragma comment(lib, "ws2_32.lib")
+#define mkdir(path, mode) _mkdir(path)
+#define sleep(seconds) Sleep((seconds) * 1000)
+#define strdup _strdup
+#define ntohl(x) _byteswap_ulong(x)
+#define be64toh(x) _byteswap_uint64(x)
+HANDLE hConsole;
+CONSOLE_SCREEN_BUFFER_INFO consoleInfo;
 #else
-    #define _GNU_SOURCE
-    #define _DEFAULT_SOURCE
-    #include <arpa/inet.h>
-    #include <sys/stat.h>
-    #include <unistd.h>
-    #include <pthread.h>
+#define _GNU_SOURCE
+#define _DEFAULT_SOURCE
+#include <arpa/inet.h>
+#include <pthread.h>
+#include <sys/stat.h>
+#include <unistd.h>
 #endif
 
+#include <brotli/decode.h>
+#include <bzlib.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <lzma.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <brotli/decode.h>
-#include <bzlib.h>
-#include <lzma.h>
 #include <zstd.h>
 
 #include "update_metadata.pb-c.h"
@@ -43,34 +43,32 @@
 #endif
 
 #ifdef _WIN32
-    #define PRIu64 "llu"
+#define PRIu64 "llu"
 #else
-    #include <inttypes.h>
+#include <inttypes.h>
 #endif
 
 #ifdef _WIN32
-    typedef HANDLE thread_t;
-    typedef CRITICAL_SECTION mutex_t;
-    #define MUTEX_INITIALIZER {0}
+typedef HANDLE thread_t;
+typedef CRITICAL_SECTION mutex_t;
+#define MUTEX_INITIALIZER {0}
 #else
-    typedef pthread_t thread_t;
-    typedef pthread_mutex_t mutex_t;
-    #define MUTEX_INITIALIZER PTHREAD_MUTEX_INITIALIZER
+typedef pthread_t thread_t;
+typedef pthread_mutex_t mutex_t;
+#define MUTEX_INITIALIZER PTHREAD_MUTEX_INITIALIZER
 #endif
 
 void mutex_init(mutex_t *mutex);
 void mutex_destroy(mutex_t *mutex);
 void mutex_lock(mutex_t *mutex);
 void mutex_unlock(mutex_t *mutex);
-int thread_create(thread_t *thread, void *(*start_routine)(void*), void *arg);
+int thread_create(thread_t *thread, void *(*start_routine)(void *), void *arg);
 void thread_join(thread_t thread);
-
 
 #define MAGIC_HEADER "CrAU"
 #define MAGIC_LEN 4
 #define MAX_PARTITIONS 64
 #define MAX_THREADS 8
-
 
 typedef struct {
   char partition_name[256];
@@ -86,8 +84,6 @@ typedef struct {
   char *out_dir;
   mutex_t *reader_mutex;
 } thread_data_t;
-
-
 
 uint32_t read_u32_be(const uint8_t *data);
 uint64_t read_u64_be(const uint8_t *data);
@@ -136,68 +132,69 @@ char *format_size(uint64_t bytes) {
 
 void mutex_init(mutex_t *mutex) {
 #ifdef _WIN32
-    InitializeCriticalSection(mutex);
+  InitializeCriticalSection(mutex);
 #else
-    pthread_mutex_init(mutex, NULL);
+  pthread_mutex_init(mutex, NULL);
 #endif
 }
 
 void mutex_destroy(mutex_t *mutex) {
 #ifdef _WIN32
-    DeleteCriticalSection(mutex);
+  DeleteCriticalSection(mutex);
 #else
-    pthread_mutex_destroy(mutex);
+  pthread_mutex_destroy(mutex);
 #endif
 }
 
 void mutex_lock(mutex_t *mutex) {
 #ifdef _WIN32
-    EnterCriticalSection(mutex);
+  EnterCriticalSection(mutex);
 #else
-    pthread_mutex_lock(mutex);
+  pthread_mutex_lock(mutex);
 #endif
 }
 
 void mutex_unlock(mutex_t *mutex) {
 #ifdef _WIN32
-    LeaveCriticalSection(mutex);
+  LeaveCriticalSection(mutex);
 #else
-    pthread_mutex_unlock(mutex);
+  pthread_mutex_unlock(mutex);
 #endif
 }
 
 #ifdef _WIN32
 DWORD WINAPI windows_thread_wrapper(LPVOID arg) {
-    void *(*start_routine)(void*) = (void*(*)(void*))((void**)arg)[0];
-    void *thread_arg = ((void**)arg)[1];
-    start_routine(thread_arg);
-    free(arg);
-    return 0;
+  void *(*start_routine)(void *) = (void *(*)(void *))((void **)arg)[0];
+  void *thread_arg = ((void **)arg)[1];
+  start_routine(thread_arg);
+  free(arg);
+  return 0;
 }
 #endif
 
-int thread_create(thread_t *thread, void *(*start_routine)(void*), void *arg) {
+int thread_create(thread_t *thread, void *(*start_routine)(void *), void *arg) {
 #ifdef _WIN32
-    void **wrapper_args = malloc(2 * sizeof(void*));
-    if (!wrapper_args) return -1;
-    wrapper_args[0] = (void*)start_routine;
-    wrapper_args[1] = arg;
-    *thread = CreateThread(NULL, 0, windows_thread_wrapper, wrapper_args, 0, NULL);
-    return (*thread == NULL) ? -1 : 0;
+  void **wrapper_args = malloc(2 * sizeof(void *));
+  if (!wrapper_args)
+    return -1;
+  wrapper_args[0] = (void *)start_routine;
+  wrapper_args[1] = arg;
+  *thread =
+      CreateThread(NULL, 0, windows_thread_wrapper, wrapper_args, 0, NULL);
+  return (*thread == NULL) ? -1 : 0;
 #else
-    return pthread_create(thread, NULL, start_routine, arg);
+  return pthread_create(thread, NULL, start_routine, arg);
 #endif
 }
 
 void thread_join(thread_t thread) {
 #ifdef _WIN32
-    WaitForSingleObject(thread, INFINITE);
-    CloseHandle(thread);
+  WaitForSingleObject(thread, INFINITE);
+  CloseHandle(thread);
 #else
-    pthread_join(thread, NULL);
+  pthread_join(thread, NULL);
 #endif
 }
-
 
 progress_info_t g_progress[MAX_PARTITIONS];
 int g_num_partitions = 0;
@@ -242,8 +239,10 @@ void update_progress(int partition_idx) {
 
 #ifdef _WIN32
   GetConsoleScreenBufferInfo(hConsole, &consoleInfo);
-  COORD newPos = {0, (SHORT)(consoleInfo.dwCursorPosition.Y - g_num_partitions)};
-  if (newPos.Y < 0) newPos.Y = 0;
+  COORD newPos = {0,
+                  (SHORT)(consoleInfo.dwCursorPosition.Y - g_num_partitions)};
+  if (newPos.Y < 0)
+    newPos.Y = 0;
   SetConsoleCursorPosition(hConsole, newPos);
 #else
   printf("\033[%dA", g_num_partitions);
@@ -251,15 +250,16 @@ void update_progress(int partition_idx) {
 
   for (int i = 0; i < g_num_partitions; i++) {
     progress_info_t *p = &g_progress[i];
-    int percent = (int)((double)p->completed_ops / (double)p->total_ops * 100.0);
+    int percent =
+        (int)((double)p->completed_ops / (double)p->total_ops * 100.0);
     int filled = (int)((double)p->completed_ops / (double)p->total_ops * 30.0);
-    
+
 #ifdef _WIN32
     printf("%-80s\r", "");
 #else
     printf("\033[2K");
 #endif
-    
+
     printf("[T%d] %-12s [", p->thread_id, p->partition_name);
     for (int j = 0; j < 30; j++) {
       if (j < filled)
@@ -272,11 +272,11 @@ void update_progress(int partition_idx) {
     printf("] %3d%% (%zu/%zu)", percent, p->completed_ops, p->total_ops);
     if (p->completed_ops == p->total_ops) {
 #ifdef _WIN32
-  printf(" [DONE]");
+      printf(" [DONE]");
 #else
-  printf(" ✓ DONE");
+      printf(" ✓ DONE");
 #endif
-}
+    }
     printf("\n");
   }
   fflush(stdout);
@@ -486,10 +486,13 @@ int process_operation(ChromeosUpdateEngine__InstallOperation *op,
     size_t decomp_size;
     if (decompress_lzma(op_data, op->data_length, &decompressed,
                         &decomp_size) == 0) {
-      #ifdef _WIN32
-_fseeki64(out_file, (__int64)(op->dst_extents[0]->start_block * block_size), SEEK_SET);
+#ifdef _WIN32
+      _fseeki64(out_file,
+                (__int64)(op->dst_extents[0]->start_block * block_size),
+                SEEK_SET);
 #else
-fseek(out_file, (long)(op->dst_extents[0]->start_block * block_size), SEEK_SET);
+      fseek(out_file, (long)(op->dst_extents[0]->start_block * block_size),
+            SEEK_SET);
 #endif
       fwrite(decompressed, 1, decomp_size, out_file);
       free(decompressed);
@@ -501,10 +504,13 @@ fseek(out_file, (long)(op->dst_extents[0]->start_block * block_size), SEEK_SET);
     size_t decomp_size;
     if (decompress_zstd(op_data, op->data_length, &decompressed,
                         &decomp_size) == 0) {
-      #ifdef _WIN32
-_fseeki64(out_file, (__int64)(op->dst_extents[0]->start_block * block_size), SEEK_SET);
+#ifdef _WIN32
+      _fseeki64(out_file,
+                (__int64)(op->dst_extents[0]->start_block * block_size),
+                SEEK_SET);
 #else
-fseek(out_file, (long)(op->dst_extents[0]->start_block * block_size), SEEK_SET);
+      fseek(out_file, (long)(op->dst_extents[0]->start_block * block_size),
+            SEEK_SET);
 #endif
       fwrite(decompressed, 1, decomp_size, out_file);
       free(decompressed);
@@ -516,10 +522,13 @@ fseek(out_file, (long)(op->dst_extents[0]->start_block * block_size), SEEK_SET);
     size_t decomp_size;
     if (decompress_bz2(op_data, op->data_length, &decompressed, &decomp_size) ==
         0) {
-      #ifdef _WIN32
-_fseeki64(out_file, (__int64)(op->dst_extents[0]->start_block * block_size), SEEK_SET);
+#ifdef _WIN32
+      _fseeki64(out_file,
+                (__int64)(op->dst_extents[0]->start_block * block_size),
+                SEEK_SET);
 #else
-fseek(out_file, (long)(op->dst_extents[0]->start_block * block_size), SEEK_SET);
+      fseek(out_file, (long)(op->dst_extents[0]->start_block * block_size),
+            SEEK_SET);
 #endif
       fwrite(decompressed, 1, decomp_size, out_file);
       free(decompressed);
@@ -534,10 +543,13 @@ fseek(out_file, (long)(op->dst_extents[0]->start_block * block_size), SEEK_SET);
   }
   case CHROMEOS_UPDATE_ENGINE__INSTALL_OPERATION__TYPE__ZERO: {
     for (size_t i = 0; i < op->n_dst_extents; i++) {
-      #ifdef _WIN32
-_fseeki64(out_file, (__int64)(op->dst_extents[0]->start_block * block_size), SEEK_SET);
+#ifdef _WIN32
+      _fseeki64(out_file,
+                (__int64)(op->dst_extents[0]->start_block * block_size),
+                SEEK_SET);
 #else
-fseek(out_file, (long)(op->dst_extents[0]->start_block * block_size), SEEK_SET);
+      fseek(out_file, (long)(op->dst_extents[0]->start_block * block_size),
+            SEEK_SET);
 #endif
       size_t zero_size = op->dst_extents[i]->num_blocks * block_size;
       uint8_t *zero_buf = calloc(1, zero_size);
@@ -623,10 +635,12 @@ void list_partitions(ChromeosUpdateEngine__DeltaArchiveManifest *manifest) {
       size_bytes = part->new_partition_info->size;
     }
     total_size += size_bytes;
-    printf("%-20s %-15s %-15" PRIu64 "\n", part->partition_name, format_size(size_bytes), size_bytes);
+    printf("%-20s %-15s %-15" PRIu64 "\n", part->partition_name,
+           format_size(size_bytes), size_bytes);
   }
   printf("%-50s\n", "─────────────────────────────────────────────────");
-  printf("%-20s %-15s %-15" PRIu64 "\n", "Total", format_size(total_size), total_size);
+  printf("%-20s %-15s %-15" PRIu64 "\n", "Total", format_size(total_size),
+         total_size);
   printf("\nTotal partitions: %zu\n", manifest->n_partitions);
   printf("Block size: %u bytes\n", manifest->block_size);
 }
@@ -653,8 +667,8 @@ reader_t *open_payload_source(const char *source_path, const char *user_agent,
           *payload_offset = payload_entry.data_offset;
           *payload_size =
               payload_entry.uncompressed_size; // or compressed_size?
-          printf("- Found payload: offset=%" PRIu64 ", size=%s\n", *payload_offset,
-                 format_size(*payload_size));
+          printf("- Found payload: offset=%" PRIu64 ", size=%s\n",
+                 *payload_offset, format_size(*payload_size));
           return reader;
         }
       }
@@ -715,7 +729,7 @@ int extract_payload(const char *payload_path, const char *user_agent,
                     int num_threads) {
   mutex_init(&g_progress_mutex);
   mutex_init(&g_queue_mutex);
-  
+
   uint64_t payload_offset, payload_size;
   reader_t *payload_reader = open_payload_source(
       payload_path, user_agent, &payload_offset, &payload_size);
@@ -753,7 +767,8 @@ int extract_payload(const char *payload_path, const char *user_agent,
   uint64_t file_format_version = read_u64_be(version_buf);
 
   if (file_format_version != 2) {
-    printf("- Unsupported file format version: %" PRIu64 "\n", file_format_version);
+    printf("- Unsupported file format version: %" PRIu64 "\n",
+           file_format_version);
     reader_cleanup(payload_reader);
     free(payload_reader);
     mutex_destroy(&g_queue_mutex);
@@ -836,9 +851,17 @@ int extract_payload(const char *payload_path, const char *user_agent,
 
   g_num_partitions = (int)manifest->n_partitions;
   for (size_t i = 0; i < manifest->n_partitions; i++) {
+#ifdef _MSC_VER
+    strncpy_s(g_progress[i].partition_name,
+              sizeof(g_progress[i].partition_name),
+              manifest->partitions[i]->partition_name, _TRUNCATE);
+#else
     strncpy(g_progress[i].partition_name,
             manifest->partitions[i]->partition_name,
             sizeof(g_progress[i].partition_name) - 1);
+    g_progress[i].partition_name[sizeof(g_progress[i].partition_name) - 1] =
+        '\0';
+#endif
     g_progress[i].total_ops = manifest->partitions[i]->n_operations;
     g_progress[i].completed_ops = 0;
     g_progress[i].thread_id = (int)(i % (size_t)num_threads);
@@ -866,8 +889,16 @@ int extract_payload(const char *payload_path, const char *user_agent,
   progress_initialized = 0;
   g_num_partitions = g_queue_size;
   for (int i = 0; i < g_queue_size; i++) {
+#ifdef _MSC_VER
+    strncpy_s(g_progress[i].partition_name,
+              sizeof(g_progress[i].partition_name),
+              g_work_queue[i]->partition_name, _TRUNCATE);
+#else
     strncpy(g_progress[i].partition_name, g_work_queue[i]->partition_name,
             sizeof(g_progress[i].partition_name) - 1);
+    g_progress[i].partition_name[sizeof(g_progress[i].partition_name) - 1] =
+        '\0';
+#endif
     g_progress[i].total_ops = g_work_queue[i]->n_operations;
     g_progress[i].completed_ops = 0;
     g_progress[i].thread_id = i % num_threads;
@@ -988,10 +1019,10 @@ int main(int argc, char *argv[]) {
 
   printf("- Payload Dumper\n");
   if (!list_only) {
-    printf("Output directory: %s\n", out_dir);
-    printf("Threads: %d\n", num_threads);
+    printf("- Output directory: %s\n", out_dir);
+    printf("- Threads: %d\n", num_threads);
     if (strlen(images_list) > 0) {
-      printf("Selected images: %s\n", images_list);
+      printf("- Selected images: %s\n", images_list);
     }
     printf("\n");
   }
