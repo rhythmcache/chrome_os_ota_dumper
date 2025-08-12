@@ -1,9 +1,9 @@
-# chrome_os_ota_dumper
-
+# payload_dumper
+<!--
 This was the **initial C prototype** of [payload-dumper-rust](https://github.com/rhythmcache/payload-dumper-rust). I originally started developing this tool in C but later migrated the project to Rust for better safety, maintainability, and performance.
 
 This C version is now **completed for archival and comparison purposes**, but no longer actively maintained.
-
+-->
 
 ## Dependencies
 
@@ -48,8 +48,8 @@ Options:
   --user-agent <ua>    Custom User-Agent for HTTP requests
   --help               Show this help message
 ```
-
+<!--
 ## Current Status
 **📦 Archived** - No longer actively maintained  
 **🦀 Succeeded by** - [payload-dumper-rust](https://github.com/rhythmcache/payload-dumper-rust)
-
+-->
